@@ -1,0 +1,99 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint:
+    name: Lint Code
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8
+
+      - name: Lint with flake8
+        run: |
+          flake8 app/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 app/ --count --max-complexity=10 --max-line-length=127 --statistics
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+
+      - name: Create test environment
+        run: |
+          mkdir -p data/vector_store logs
+          cp .env.example .env
+
+      - name: Run tests
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          pytest tests/ -v --cov=app --cov-report=xml --cov-report=term
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false
+
+  build:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build Docker image
+        run: |
+          docker build -f docker/Dockerfile -t health-coach:latest .
+
+      - name: Test Docker image
+        run: |
+          docker run --rm health-coach:latest python -c "import app; print('Image OK')"
+
+  deploy:
+    name: Deploy (Placeholder)
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Deployment placeholder
+        run: |
+          echo "Deployment step - configure for AWS ECS, GCP Cloud Run, etc."
+          echo "Example: Deploy to AWS ECS or push to container registry"

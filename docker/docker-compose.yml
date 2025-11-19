@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  health-coach-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: health-coach-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../data:/app/data
+      - ../logs:/app/logs
+      - ../.env:/app/.env
+    environment:
+      - DATABASE_PATH=/app/data/health_coach.db
+      - VECTOR_STORE_PATH=/app/data/vector_store/
+      - LOG_FILE=/app/logs/health_coach.log
+    restart: unless-stopped
+    networks:
+      - health-coach-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  health-coach-frontend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: health-coach-frontend
+    command: ["streamlit", "run", "app/frontend/app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+    ports:
+      - "8501:8501"
+    volumes:
+      - ../.env:/app/.env
+    environment:
+      - API_BASE_URL=http://health-coach-api:8000
+    depends_on:
+      health-coach-api:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - health-coach-network
+
+networks:
+  health-coach-network:
+    driver: bridge
+
+volumes:
+  data:
+  logs:
